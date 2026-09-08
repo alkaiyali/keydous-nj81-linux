@@ -7,14 +7,27 @@
 # NOTE: the driver detaches usbhid from the feature interface (interface 2)
 # while talking to the keyboard. usbhid does not always rebind afterwards;
 # to rebind manually:  sudo sh -c 'echo -n "3-2:1.2" > /sys/bus/usb/drivers/usbhid/bind'
+#
+# PIDs mirror keydous/devices.py (VID 0x3151, re-verified 2026-08-26).
+# 0x4010 NJ81 wired / 0x4011 NJ81 dongle / 0x4015 NJ81S / 0x4018 NJ81-ED
+# 0x4007 NJ80/NJ68 YC400 / 0x400B NJ68 YC200 legacy / 0x401E FD98T
+# 0x4021/0x4022 HF-K1 / FD98T SOC
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4007", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="400b", MODE="0660", GROUP="plugdev"
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4010", MODE="0660", GROUP="plugdev"
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4011", MODE="0660", GROUP="plugdev"
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4015", MODE="0660", GROUP="plugdev"
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4018", MODE="0660", GROUP="plugdev"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="401B", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="401e", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4021", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4022", MODE="0660", GROUP="plugdev"
 
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4007", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="400b", MODE="0660", GROUP="plugdev"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4010", MODE="0660", GROUP="plugdev"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4011", MODE="0660", GROUP="plugdev"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4015", MODE="0660", GROUP="plugdev"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4018", MODE="0660", GROUP="plugdev"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="401B", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="401e", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4021", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", ATTRS{idProduct}=="4022", MODE="0660", GROUP="plugdev"

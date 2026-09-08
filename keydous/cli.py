@@ -79,9 +79,10 @@ def cmd_list(args):
 def cmd_info(args):
     with _open_device(args) as dev:
         kb = protocol.Keyboard(dev)
-        print(f"firmware: v{ (kb.firmware_version() & 0xffff) // 100}."
-              f"{(kb.firmware_version() % 100):02d} "
-              f"(raw 0x{kb.firmware_version():04x})")
+        fw = kb.firmware_version()  # single USB round-trip, reuse below
+        print(f"firmware: v{(fw & 0xffff) // 100}."
+              f"{(fw % 100):02d} "
+              f"(raw 0x{fw:04x})")
         try:
             pct, status = kb.battery()
             if pct == 0 and status == "charging":
@@ -116,6 +117,9 @@ def cmd_battery(args):
 
 
 def cmd_profile(args):
+    if args.value is not None and not 0 <= args.value <= 5:
+        print("error: profile must be 0..5", file=sys.stderr)
+        return 1
     with _open_device(args) as dev:
         kb = protocol.Keyboard(dev)
         if args.value is None:
@@ -127,13 +131,27 @@ def cmd_profile(args):
 
 
 def cmd_report_rate(args):
+    # Accept: `report-rate` (get), `report-rate 500`,
+    # `report-rate set 500` (legacy form).
+    value = args.value
+    if value is None and args.set not in (None, "get", "set"):
+        try:
+            value = int(args.set)
+        except ValueError:
+            print(f"error: invalid report rate {args.set!r} "
+                  "(choose 125, 250, 500, 1000)", file=sys.stderr)
+            return 1
     with _open_device(args) as dev:
         kb = protocol.Keyboard(dev)
-        if args.value is None:
+        if value is None:
             print(f"{kb.report_rate()} Hz")
         else:
-            kb.set_report_rate(args.value)
-            print(f"report rate set to {args.value} Hz")
+            if value not in (125, 250, 500, 1000):
+                print("error: report rate must be 125, 250, 500, or 1000 Hz",
+                      file=sys.stderr)
+                return 1
+            kb.set_report_rate(value)
+            print(f"report rate set to {value} Hz")
     return 0
 
 
@@ -156,25 +174,41 @@ def cmd_option(args):
     return 0
 
 
+def _parse_rgb(s):
+    """Parse hex color: FFA500, #FFA500, 0xFFA500."""
+    s = s.strip().lstrip("#")
+    if s.lower().startswith("0x"):
+        s = s[2:]
+    value = int(s, 16)
+    if not 0 <= value <= 0xFFFFFF:
+        raise ValueError("rgb must be 24-bit hex")
+    return value
+
+
 def cmd_light(args):
+    # Accept both `light breath` and legacy `light set breath` (docstring form).
+    mode_name = args.set
+    if isinstance(mode_name, list):
+        mode_name = [a for a in mode_name if a != "set"]
+        mode_name = mode_name[0] if mode_name else None
     with _open_device(args) as dev:
         kb = protocol.Keyboard(dev)
-        if args.set is None:
+        if mode_name is None:
             cur = kb.get_light()
             print(f"mode: {cur['mode']} speed: {cur['speed']} "
                   f"value: {cur['value']} param: {cur['param']} "
                   f"rgb: #{cur['rgb']:06x}")
             return 0
-        mode = protocol.LED_MODES.get(args.set)
+        mode = protocol.LED_MODES.get(mode_name)
         if mode is None:
-            print(f"unknown mode {args.set!r}; choose from: "
+            print(f"unknown mode {mode_name!r}; choose from: "
                   + ", ".join(protocol.LED_MODES), file=sys.stderr)
             return 1
         rgb = args.rgb or 0xFFFFFF
         kb.set_light(mode, speed=args.speed, value=args.value,
                      param=args.param,
                      r=(rgb >> 16) & 0xFF, g=(rgb >> 8) & 0xFF, b=rgb & 0xFF)
-        print(f"light set to {args.set}")
+        print(f"light set to {mode_name}")
     return 0
 
 def cmd_reset(args):
@@ -247,6 +281,8 @@ def build_parser():
                                 description="Keydous keyboard driver (Linux)")
     p.add_argument("--ble", metavar="ADDR", default=None,
                    help="use BLE transport at MAC address (e.g. AA:BB:..)")
+    p.add_argument("--version", action="store_true",
+                   help="print driver version and exit")
     sub = p.add_subparsers(dest="cmd")
 
     sub.add_parser("list", help="list Keydous USB HID devices")
@@ -276,14 +312,16 @@ def build_parser():
     op.add_argument("set", nargs="*", metavar="KEY=VALUE")
 
     lt = sub.add_parser("light", help="get/set LED effect")
-    lt.add_argument("set", nargs="?", metavar="MODE",
+    lt.add_argument("set", nargs="*", metavar="MODE",
                     help="off|always_on|breath|wave|ripple|raindrop|snake|...")
     lt.add_argument("--speed", type=int, default=0)
     lt.add_argument("--value", type=int, default=4)
     lt.add_argument("--param", type=int, default=None)
-    lt.add_argument("--rgb", type=lambda s: int(s, 16), default=None)
+    lt.add_argument("--rgb", type=_parse_rgb, default=None)
 
     sub.add_parser("reset", help="restore defaults / reset device")
+
+    sub.add_parser("version", help="print driver version")
 
     raw = sub.add_parser("raw", help="low-level feature report")
     raw.add_argument("--cmd", dest="raw_cmd",
@@ -297,9 +335,17 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    if getattr(args, "version", False):
+        from . import __version__
+        print(f"keydous-nj81 {__version__}")
+        return 0
     try:
         if args.cmd is None:
             build_parser().print_help()
+            return 0
+        if args.cmd == "version":
+            from . import __version__
+            print(f"keydous-nj81 {__version__}")
             return 0
         return {
             "list": cmd_list,

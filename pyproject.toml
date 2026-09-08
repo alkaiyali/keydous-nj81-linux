@@ -1,0 +1,28 @@
+[project]
+name = "keydous-nj81"
+version = "1.0.0"
+description = "Open-source Linux driver and web GUI for the Keydous NJ81 keyboard"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "YappLeCunt" }]
+dependencies = []
+
+[project.optional-dependencies]
+ble = ["dbus-next"]
+gui = ["PyGObject"]
+test = ["pytest"]
+
+[project.scripts]
+keydous-driver = "keydous.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E501"]

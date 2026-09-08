@@ -1,14 +1,25 @@
 """Device database recovered from iot_driver's embedded `SupportVender` table.
 
+Re-verified 2026-08-26 against the vendor driver bundle in
+`~/keydous-project/study/device-table.json` (1027 entries extracted from the
+minified Electron app). Only VID 0x3151 entries are listed here.
+
 Keydous keyboards expose two personalities:
   * USB wired / dongle (2.4G): a vendor HID interface.
       vid 0x3151, usage_page 0xffff, usage 2, bInterfaceNumber 2,
       feature report length 65 (report-id + 64 bytes).
   * BLE: the keyboard advertises as a vendor HID over GATT using the
       Feasycom/Nordic UART Service, reachable only over the air.
+
+Vendor PID semantics across the whole table:
+  0x4002 wired YZW generation   0x4003 dongle YC200/300
+  0x4007 wired YC400            0x400b MOUSE (common_mouse) - never a keyboard
+  0x4010 wired YC500 (NJ81/NJ68/NJ80 ...)     0x4011 its 2.4G dongle
+  0x4015 SOC-generation boards  0x4017 SOC dongle variant
+  0x4018 k433p/k84-single       0x401e lj_fd98t    0x4021/0x4022 yc3016a
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 # --- BLE GATT service/characteristic UUIDs (from macOS iot_v217 binary) ---
@@ -41,32 +52,34 @@ def _d(pid, name, display, dongle=False, ble=False, usage=2, up=0xFFFF, itf=2):
                    name=name, display_name=display)
 
 
-# Recovered from iot_driver.exe (2023) SupportVender table + Electron config.
+# Recovered from iot_driver.exe SupportVender table; cross-checked against the
+# full 2026 vendor dump (see module docstring). PIDs that appear ONLY under
+# other VIDs (0x0461/0x25a7/0x05ac/...) are intentionally not registered.
 DEVICES: dict[int, DevDesc] = {}
 
 
 def _reg(desc: DevDesc) -> DevDesc:
+    if desc.pid in DEVICES:
+        raise ValueError(f"duplicate PID {desc.pid:#06x} in device table")
     DEVICES[desc.pid] = desc
     return desc
 
 
-# NJ81 family (YC500, feature report len 65, usage 2, usage_page 0xffff)
-_reg(_d(0x4010, "yc500_nj81", "NJ81", dongle=True))
-_reg(_d(0x4011, "yc500_nj81", "NJ81", dongle=True))
-_reg(_d(0x4015, "yc500_nj81s", "NJ81S", dongle=True))
-_reg(_d(0x4018, "yc500_nj81_ed", "NJ81-ED"))
-_reg(_d(0x401B, "yc500_nj81s_ed", "NJ81S-ED"))
+# --- NJ81 family (YC500 generation) ---------------------------------------
+_reg(_d(0x4010, "yc500_nj81", "NJ81"))                    # wired personality
+_reg(_d(0x4011, "yc500_nj81", "NJ81", dongle=True))       # 2.4G dongle
+_reg(_d(0x4015, "yc500_nj81s", "NJ81S", dongle=True))     # SOC gen shares 0x4015
+_reg(_d(0x4018, "yc500_nj81_ed", "NJ81-ED"))              # k433p / k84-single share it
 
-# Other Keydous keyboards seen in the same table
-_reg(_d(0x4007, "yc200_nj80", "NJ80", dongle=True))
-_reg(_d(0x4008, "yc200_nj80", "NJ80", dongle=True))
-_reg(_d(0x400B, "yc200_nj68", "NJ68", dongle=True))
-_reg(_d(0x4021, "yc500", "YC500", dongle=True))
+# --- other Keydous keyboards on VID 0x3151 ---------------------------------
+_reg(_d(0x4007, "yc400_nj80", "NJ80/NJ68 (YC400)", dongle=True))
+_reg(_d(0x400B, "yc200_nj68", "NJ68 (YC200 legacy)", dongle=True))
+_reg(_d(0x401e, "yc3016a_lj_fd98t", "FD98T"))
+_reg(_d(0x4021, "yc3016a_hf_k1", "HF-K1 / FD98T (SOC)", dongle=True))
+_reg(_d(0x4022, "yc3016a_hf_k1", "HF-K1 (SOC)", dongle=True))
 
-# BLE personalities: the keyboard's BLE HID interface.
-_reg(_d(0x4012, "ble", "NJ BLE", ble=True, usage=0x202, up=0xFF66, itf=-1))
-_reg(_d(0x4013, "ble", "NJ BLE", ble=True, usage=0x202, up=0xFF55, itf=-1))
-_reg(_d(0x401C, "ble", "NJ BLE", ble=True, usage=0x202, up=0xFF55, itf=-1))
+# NOTE: 0x400b is common_mouse in the vendor table -- deliberately NOT
+# registered as a keyboard. The old entry claimed it was an NJ68.
 
 
 def find_usb(vid: int, pid: int, usage: int, usage_page: int) -> Optional[DevDesc]:
@@ -78,3 +91,13 @@ def find_usb(vid: int, pid: int, usage: int, usage_page: int) -> Optional[DevDes
 
 def lookup(pid: int) -> Optional[DevDesc]:
     return DEVICES.get(pid)
+
+
+def is_keydous_vid(vid: int) -> bool:
+    """True for the Keydous USB vendor id (0x3151)."""
+    return vid == 0x3151
+
+
+def all_usb_pids() -> list[int]:
+    """Every known keyboard PID on VID 0x3151 (wired + dongles)."""
+    return sorted(p for p, d in DEVICES.items() if not d.ble)

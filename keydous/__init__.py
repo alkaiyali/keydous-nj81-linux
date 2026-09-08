@@ -10,4 +10,4 @@ Transport options:
   * BLE via BlueZ D-Bus (requires python-dbus/gi or bleak)
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"

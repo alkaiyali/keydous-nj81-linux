@@ -22,6 +22,7 @@ from .rawusb import RawUsbKeyboard, UsbBusError
 
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 PAGE_FILE = os.path.join(DATA_DIR, "gui.html")
+DEFAULT_PORT = 8765
 
 
 def _load_json(name):
@@ -79,9 +80,17 @@ LIGHT_OPTIONS = {
 
 
 def _open_dev():
-    """Return a raw USB NJ-family device, preferring the direct NJ81 PID."""
+    """Return a raw USB NJ-family device, preferring direct keyboard PIDs.
+
+    Order matters: wired personalities first (0x4010/0x4007), then dongles
+    (0x4011/0x4015/...). All PIDs are from devices.py, which mirrors the
+    vendor SupportVender table (re-verified 2026-08).
+    """
+    from .devices import all_usb_pids
+
     errors = []
-    for pid in (0x4010, 0x4011, 0x4015, 0x4018, 0x401B):
+    for pid in (0x4010, 0x4007) + tuple(p for p in all_usb_pids()
+                                        if p not in (0x4010, 0x4007)):
         try:
             return RawUsbKeyboard(pid=pid)
         except UsbBusError as exc:
@@ -683,7 +692,7 @@ def _build_page():
 _PAGE = ""
 
 
-def create_server(host="127.0.0.1", port=8765):
+def create_server(host="127.0.0.1", port=DEFAULT_PORT):
     """Build (but do not run) the HTTP server and build the page once.
 
     Returns a ThreadingHTTPServer the caller must ``serve_forever()`` or
@@ -711,7 +720,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="keydous-gui",
                                      description="Keydous NJ81 web GUI")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = parser.parse_args(argv)
 
     server = create_server(args.host, args.port)

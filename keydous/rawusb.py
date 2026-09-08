@@ -169,9 +169,54 @@ class RawUsbKeyboard:
                               f"{ctypes.get_errno()}")
         return bytes(buf[:ret])
 
+    def _sysfs_dir(self) -> str | None:
+        """Resolve /sys/bus/usb/devices/<dev> for self.node.
+
+        self.node looks like /dev/bus/usb/003/005 (busnum/devnum). The
+        matching sysfs dir is found by comparing busnum/devnum files,
+        e.g. /sys/bus/usb/devices/3-2. This also works after re-enumeration
+        where the old /dev path is stale. Returns None when not found."""
+        if not self.node:
+            return None
+        try:
+            parts = self.node.rsplit("/", 2)
+            bus = str(int(parts[-2]))
+            dev = str(int(parts[-1]))
+        except (ValueError, IndexError):
+            return None
+        import glob
+        for d in glob.glob("/sys/bus/usb/devices/*"):
+            # skip interface dirs like 3-2:1.2, keep device dirs like 3-2
+            if ":" in os.path.basename(d):
+                continue
+            try:
+                with open(os.path.join(d, "busnum")) as fh:
+                    b = fh.read().strip()
+                with open(os.path.join(d, "devnum")) as fh:
+                    n = fh.read().strip()
+            except OSError:
+                continue
+            if b.lstrip("0") == bus.lstrip("0") or b == bus:
+                if n.lstrip("0") == dev.lstrip("0") or n == dev:
+                    return d
+        return None
+
     def _reset(self):
-        """USBDEVFS_RESET - re-enumerates the device and clears the wedge."""
+        """USBDEVFS_RESET - re-enumerates the device and clears the wedge.
+
+        Refuse when the node is a hub: USBDEVFS_RESET on a hub takes down
+        every device behind it (keyboards, disks, ...)."""
         USBDEVFS_RESET = 0x00005514
+        sysfs_dir = self._sysfs_dir()
+        if sysfs_dir:
+            try:
+                with open(os.path.join(sysfs_dir, "bDeviceClass")) as fh:
+                    if int(fh.read().strip(), 16) == 0x09:   # 0x09 = hub
+                        raise UsbBusError("refusing to USB-reset a hub")
+            except UsbBusError:
+                raise
+            except (OSError, ValueError):
+                pass  # sysfs read failed; fall through to the reset
         _libc.ioctl(self._fd, USBDEVFS_RESET)
         time.sleep(0.6)
         # the reset may have re-enumerated the interface; re-detach usbhid

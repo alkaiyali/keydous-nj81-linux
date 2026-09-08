@@ -6,6 +6,10 @@ real desktop app (own window, launcher icon, desktop shortcut).
 
 Uses GTK3 + WebKit2 4.1 (this system's WebKitGTK 4.1 typelib depends on
 GTK3). Requirements: ``python3-gi``, ``gir1.2-webkit2-4.1``.
+
+Single-instance: launching the app twice focuses the existing window
+(Gtk.Application with default flags) instead of fighting over the USB
+device and opening a second backend.
 """
 
 import os
@@ -24,6 +28,8 @@ if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from keydous import gui  # noqa: E402
 
+# Gio.ApplicationFlags.FLAGS_NONE == 0: GApplication enforces uniqueness by
+# APP_ID, so a second launch activates the first instance and exits.
 APP_ID = "io.github.yapplecunt.keydousnj81"
 DEFAULT_SIZE = (1160, 840)
 ICON_PATH = os.path.join(
@@ -31,7 +37,7 @@ ICON_PATH = os.path.join(
     "icons", "keydous-nj81.png")
 
 
-def _find_free_port(start=8765):
+def _find_free_port(start=gui.DEFAULT_PORT):
     import socket
     port = start
     while True:
@@ -52,6 +58,13 @@ class KeydousApp:
         self.app.connect("shutdown", self._on_shutdown)
 
     def _on_activate(self, app):
+        # activate() fires for every launch; if the window already exists
+        # this is a second invocation -> present it and keep the single
+        # backend/device that the first window owns.
+        windows = app.get_windows()
+        if windows:
+            windows[0].present()
+            return
         server = gui.create_server("127.0.0.1", self.port)
         self.server = server
         threading.Thread(target=server.serve_forever, daemon=True).start()
